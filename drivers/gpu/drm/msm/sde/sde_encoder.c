@@ -39,9 +39,6 @@
 #include "sde_core_irq.h"
 #include "sde_hw_top.h"
 #include "sde_hw_qdss.h"
-#if defined(CONFIG_IRIS2P_FULL_SUPPORT)
-#include "../dsi-staging/dsi_iris2p_api.h"
-#endif
 
 #define SDE_DEBUG_ENC(e, fmt, ...) SDE_DEBUG("enc%d " fmt,\
 		(e) ? (e)->base.base.id : -1, ##__VA_ARGS__)
@@ -4686,9 +4683,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 	unsigned int i;
 	int rc, ret = 0;
 	struct msm_display_info *disp_info;
-#if defined(CONFIG_IRIS2P_FULL_SUPPORT)
-        int vsync_count = 0;
-#endif
 
 	if (!drm_enc || !params || !drm_enc->dev ||
 		!drm_enc->dev->dev_private) {
@@ -4726,13 +4720,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 			if (phys->enable_state == SDE_ENC_ERR_NEEDS_HW_RESET)
 				needs_hw_reset = true;
 			_sde_encoder_setup_dither(phys);
-#if defined(CONFIG_IRIS2P_FULL_SUPPORT)
-			if ((phys->intf_mode == INTF_MODE_CMD)
-				&& (vsync_count == 0)) {
-				vsync_count = atomic_read(&phys->vsync_cnt);
-			}
-#endif
-
 
 			if (sde_enc->cur_master &&
 					sde_connector_is_qsync_updated(
@@ -4769,11 +4756,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 	}
 
 	_sde_encoder_update_master(drm_enc, params);
-
-#if defined(CONFIG_IRIS2P_FULL_SUPPORT)
-	irisReportTeCount(vsync_count);
-	iris_cmd_kickoff_proc();
-#endif
 
 	_sde_encoder_update_roi(drm_enc);
 
@@ -6038,7 +6020,3 @@ void sde_encoder_trigger_early_wakeup(struct drm_encoder *drm_enc)
 	SDE_ATRACE_END("sde_encoder_resource_control");
 
 }
-
-#if defined(CONFIG_IRIS2P_FULL_SUPPORT)
-#include "iris_sde_encoder_helper.c"
-#endif
