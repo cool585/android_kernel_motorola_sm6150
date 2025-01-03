@@ -120,9 +120,11 @@ $(obj)/configs.o: $(obj)/config_data.h
 
 targets += config_data.gz
 ifeq ($(CONFIG_LIBER_DTB),y)
-$(obj)/config_data.gz: arch/arm64/configs/vendor/liber-stock_defconfig FORCE
+$(obj)/config_data.gz: arch/arm64/configs/stock/liber-stock_defconfig FORCE
+else ifeq ($(CONFIG_ODESSA_DTB), y)
+$(obj)/config_data.gz: arch/arm64/configs/stock/odessa-stock_defconfig FORCE
 else
-$(obj)/config_data.gz: arch/arm64/configs/hanoip-stock_defconfig FORCE
+$(obj)/config_data.gz: arch/arm64/configs/stock/hanoip-stock_defconfig FORCE
 endif
 	$(call if_changed,gzip)
 
