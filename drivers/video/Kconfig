@@ -51,4 +51,6 @@ config PANEL_NOTIFICATIONS
 	---help---
 	Panel notifications framework
 
+source "drivers/gpu/trace/Kconfig"
+
 endmenu
