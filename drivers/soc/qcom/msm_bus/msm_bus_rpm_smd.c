@@ -33,7 +33,7 @@ struct commit_data {
 	struct msm_bus_node_hw_info *slv_arb;
 };
 
-#ifdef CONFIG_DEBUG_FS
+#if 0
 void msm_bus_rpm_fill_cdata_buffer(int *curr, char *buf, const int max_size,
 	void *cdata, int nmasters, int nslaves, int ntslaves)
 {
