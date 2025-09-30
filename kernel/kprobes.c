@@ -117,6 +117,7 @@ enum kprobe_slot_state {
 	SLOT_USED = 2,
 };
 
+#ifdef CONFIG_MODULES
 static void *alloc_insn_page(void)
 {
 	return module_alloc(PAGE_SIZE);
@@ -126,6 +127,17 @@ void __weak free_insn_page(void *page)
 {
 	module_memfree(page);
 }
+#else
+static void *alloc_insn_page(void)
+{
+	return vmalloc_exec(PAGE_SIZE);
+}
+
+void __weak free_insn_page(void *page)
+{
+	vfree(page);
+}
+#endif
 
 struct kprobe_insn_cache kprobe_insn_slots = {
 	.mutex = __MUTEX_INITIALIZER(kprobe_insn_slots.mutex),
@@ -1552,6 +1564,7 @@ static int check_kprobe_address_safe(struct kprobe *p,
 
 	/* Ensure the address is in a text area, and find a module if exists. */
 	*probed_mod = NULL;
+#ifdef CONFIG_MODULES
 	if (!core_kernel_text((unsigned long) p->addr)) {
 		*probed_mod = __module_text_address((unsigned long) p->addr);
 		if (!(*probed_mod)) {
@@ -1590,6 +1603,7 @@ static int check_kprobe_address_safe(struct kprobe *p,
 			ret = -ENOENT;
 		}
 	}
+#endif
 out:
 	preempt_enable();
 	jump_label_unlock();
@@ -2258,6 +2272,7 @@ static int __init populate_kprobe_blacklist(unsigned long *start,
 	return 0;
 }
 
+#ifdef CONFIG_MODULES
 /* Module notifier call back, checking kprobes on the module */
 static int kprobes_module_callback(struct notifier_block *nb,
 				   unsigned long val, void *data)
@@ -2310,6 +2325,7 @@ static struct notifier_block kprobe_module_nb = {
 	.notifier_call = kprobes_module_callback,
 	.priority = 0
 };
+#endif
 
 /* Markers of _kprobe_blacklist section */
 extern unsigned long __start_kprobe_blacklist[];
@@ -2360,8 +2376,10 @@ static int __init init_kprobes(void)
 	err = arch_init_kprobes();
 	if (!err)
 		err = register_die_notifier(&kprobe_exceptions_nb);
+#ifdef CONFIG_MODULES
 	if (!err)
 		err = register_module_notifier(&kprobe_module_nb);
+#endif
 
 	kprobes_initialized = (err == 0);
 
