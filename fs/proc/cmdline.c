@@ -4,10 +4,23 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
+#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+extern int susfs_spoof_cmdline_or_bootconfig(struct seq_file *m);
+#endif
+
 static int cmdline_proc_show(struct seq_file *m, void *v)
 {
-	seq_printf(m, "%s\n", saved_command_line);
-	return 0;
+#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+        /* If SUSFS successfully spoofs the cmdline, it returns 0. 
+           We append a newline and exit early. */
+        if (!susfs_spoof_cmdline_or_bootconfig(m)) {
+                seq_putc(m, '\n');
+                return 0;
+        }
+#endif
+        /* Fallback to the default behavior if not spoofed */
+        seq_printf(m, "%s\n", saved_command_line);
+        return 0;
 }
 
 static int cmdline_proc_open(struct inode *inode, struct file *file)
