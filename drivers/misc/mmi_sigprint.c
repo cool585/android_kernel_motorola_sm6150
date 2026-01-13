@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/kallsyms.h>
 #include <linux/utsname.h>
 #include <linux/uaccess.h>
