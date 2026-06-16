@@ -1693,19 +1693,19 @@ static int update_time(struct inode *inode, struct timespec64 *time, int flags)
 static bool partial_relatime_needs_update(const struct path *path,
 	struct inode *inode)
 {
-	struct timespec now;
+	struct timespec64 now;
 
 	if (!(inode->i_flags & S_RELATIME))
 		return false;
 
 	now = current_time(inode);
 
-	if (timespec_compare(&inode->i_mtime, &inode->i_atime) >= 0) {
+	if (timespec64_compare(&inode->i_mtime, &inode->i_atime) >= 0) {
 		pr_debug("%s: %lu - younger mtime\n", __func__, inode->i_ino);
 		return true;
 	}
 
-	if (timespec_compare(&inode->i_ctime, &inode->i_atime) >= 0) {
+	if (timespec64_compare(&inode->i_ctime, &inode->i_atime) >= 0) {
 		pr_debug("%s: %lu - younger ctime\n", __func__, inode->i_ino);
 		return true;
 	}
