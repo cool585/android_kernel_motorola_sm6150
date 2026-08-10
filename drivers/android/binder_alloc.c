@@ -351,7 +351,7 @@ static inline struct vm_area_struct *binder_alloc_get_vma(
 	return vma;
 }
 
-static void debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
+static bool debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
 {
 	/*
 	 * Find the amount and size of buffers allocated by the current caller;
