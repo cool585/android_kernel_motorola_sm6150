@@ -132,3 +132,5 @@ Android.bp
 # Build output directories
 /out/
 /build/
+/cyber.sh
+/scr.sh
