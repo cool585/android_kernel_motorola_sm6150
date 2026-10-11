@@ -168,7 +168,7 @@ if [ -d "${KERNEL_ROOT}/.git" ]; then
 fi
 
 # Install requirements if not previously verified
-REQ_FILE="${HOME}/.cybertron_kernel_requirements"
+REQ_FILE="/tmp/.cybertron_kernel_requirements"
 if [ ! -f "${REQ_FILE}" ]; then
     echo -e "${BLUE}[INFO]: Checking build requirements...${NC}"
     PKGS=(
@@ -180,7 +180,7 @@ if [ ! -f "${REQ_FILE}" ]; then
     if command -v apt-get &>/dev/null && sudo -n true 2>/dev/null; then
         sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends "${PKGS[@]}" || true
     fi
-    touch "${REQ_FILE}"
+    touch "${REQ_FILE}" 2>/dev/null || true
 fi
 
 # Create needed directories
