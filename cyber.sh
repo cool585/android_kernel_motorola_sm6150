@@ -225,7 +225,7 @@ if [ ! -d "${GCC_DIR}" ] || [ ! -f "${GCC_DIR}/bin/aarch64-none-linux-gnu-gcc" ]
 fi
 
 # Export Toolchain Environment Variables
-export PATH="${NEUTRON_DIR}/bin:${GCC_DIR}/bin:${PATH}"
+export PATH="${TOOLCHAINS_ROOT}/bin:${NEUTRON_DIR}/bin:${GCC_DIR}/bin:${PATH}"
 export NEUTRON_PATH="${NEUTRON_DIR}/bin"
 export LD_LIBRARY_PATH="${NEUTRON_DIR}/lib:${LD_LIBRARY_PATH}"
 
