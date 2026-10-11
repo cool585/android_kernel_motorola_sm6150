@@ -771,6 +771,9 @@ static void __ufshcd_cmd_log(struct ufs_hba *hba, char *str, char *cmd_type,
 {
 	struct ufshcd_cmd_log_entry entry;
 
+	if (!cmd_type)
+		return;
+
 	entry.str = str;
 	entry.lba = lba;
 	entry.cmd_id = cmd_id;
