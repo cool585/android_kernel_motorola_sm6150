@@ -388,12 +388,13 @@ static int fpc1020_probe(struct platform_device *pdev)
 		dev_err(dev, "could not create class sysfs\n");
 		goto exit;
 	}
-#endif
+#else
 	rc = sysfs_create_group(&dev->kobj, &attribute_group);
 	if (rc) {
 		dev_err(dev, "could not create sysfs\n");
 		goto exit;
 	}
+#endif
 
 	fpc1020->irq_cnt = 0;
 	irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
@@ -416,9 +417,10 @@ static int fpc1020_probe(struct platform_device *pdev)
 	return 0;
 
 irq_exit:
-	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	fpc1020_create_sysfs(fpc1020, false);
+#else
+	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 #endif
 exit:
 	return rc;
@@ -428,9 +430,10 @@ static int fpc1020_remove(struct platform_device *pdev)
 {
 	struct  fpc1020_data *fpc1020 = dev_get_drvdata(&pdev->dev);
 
-	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	fpc1020_create_sysfs(fpc1020, false);
+#else
+	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 #endif
 
 	device_init_wakeup(fpc1020->dev, false);
