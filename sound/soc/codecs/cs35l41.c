@@ -382,11 +382,11 @@ static int cs35l41_do_fast_switch(struct cs35l41_private *cs35l41)
 
 	fw_name	= cs35l41->fast_switch_names[cs35l41->fast_switch_file_idx];
 	dev_dbg(cs35l41->dev, "fw_name:%s\n", fw_name);
-	ret	= request_firmware(&fw, fw_name, cs35l41->dev);
+	ret	= request_firmware_direct(&fw, fw_name, cs35l41->dev);
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "Failed to request firmware:%s\n",
-			fw_name);
-		return -EIO;
+		dev_dbg(cs35l41->dev, "Fast switch firmware %s not found (%d)\n",
+			fw_name, ret);
+		return 0;
 	}
 
 	/* Parse number of data in file */
