@@ -2388,6 +2388,13 @@ static int afe_send_port_topology_id(u16 port_id)
 		return -EINVAL;
 	}
 
+	/*
+	 * Tertiary MI2S RX (0x1004) to CS35L41 smart amp uses raw I2S pass-through
+	 * and does not require or accept ADSP AFE topology ID (returns ADSP_EBADPARAM).
+	 */
+	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_RX)
+		return 0;
+
 	ret = afe_get_cal_topology_id(port_id, &topology_id, AFE_TOPOLOGY_CAL);
 	if (ret < 0) {
 		pr_debug("%s: Check for LSM topology\n", __func__);
