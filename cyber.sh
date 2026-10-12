@@ -283,11 +283,11 @@ if [ "${MENUCONFIG}" -eq 1 ]; then
     exit 0
 fi
 
-# Step 3: Compile Kernel Image and DTBs
+# Step 3: Compile Kernel Image, DTBs, and Modules
 START_TIME=$(date +%s)
-echo -e "\n${BLUE}[INFO]: Building Kernel Image and Device Tree Blobs (DTBs)...${NC}\n"
+echo -e "\n${BLUE}[INFO]: Building Kernel Image, Device Tree Blobs (DTBs), and Modules...${NC}\n"
 
-make "${BUILD_OPTIONS[@]}" Image.gz dtbs
+make "${BUILD_OPTIONS[@]}" Image.gz dtbs modules
 
 # Ensure Image was generated
 KERNEL_IMG="${OUT_DIR}/arch/arm64/boot/Image.gz"
@@ -331,6 +331,7 @@ if [ -d "${ZIP_DIR}" ]; then
     
     # Clean previous builds
     rm -f *.zip Image.gz dtb *.dtb Image
+    rm -rf modules
 
     # Copy Kernel Image
     cp -f "${BUILD_DIR}/Image.gz" "${ZIP_DIR}/Image.gz"
@@ -343,6 +344,27 @@ if [ -d "${ZIP_DIR}" ]; then
             echo -e "${BLUE}[INFO]: Concatenating DTBs for ${DEVICE}...${NC}"
             cat "${DTB_DIR}"/*"${DEVICE}"*.dtb > "${ZIP_DIR}/dtb" 2>/dev/null || true
             cp -f "${ZIP_DIR}/dtb" "${BUILD_DIR}/dtb" 2>/dev/null || true
+       fi
+    fi
+    # Collect and package built loadable kernel modules (.ko)
+    MODULES=$(find "${OUT_DIR}" -name "*.ko" 2>/dev/null || true)
+    if [ -n "${MODULES}" ]; then
+        echo -e "${BLUE}[INFO]: Packaging built kernel modules into AnyKernel3...${NC}"
+        MODULES_DIR="${ZIP_DIR}/modules/vendor/lib/modules"
+        mkdir -p "${MODULES_DIR}"
+        for mod in ${MODULES}; do
+            mod_base="$(basename "${mod}")"
+            echo -e "  -> ${mod_base}"
+            "${STRIP}" --strip-unneeded "${mod}" -o "${MODULES_DIR}/${mod_base}" 2>/dev/null || \
+                cp -f "${mod}" "${MODULES_DIR}/${mod_base}"
+        done
+        if [ -f "anykernel.sh" ]; then
+            sed -i "s/do.modules=.*/do.modules=1/g" anykernel.sh
+            sed -i "s/do.systemless=.*/do.systemless=0/g" anykernel.sh
+        fi
+    else
+        if [ -f "anykernel.sh" ]; then
+            sed -i "s/do.modules=.*/do.modules=0/g" anykernel.sh
         fi
     fi
 
