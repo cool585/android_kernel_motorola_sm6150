@@ -612,7 +612,7 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 // AP: Function to check if a wakelock is on the wakelock blocker list
 static bool check_for_block(struct wakeup_source *ws)
 {
-	char wakelock_name[52] = {0};
+	char wakelock_name[132] = {0};
 	int length;
 
 	// if debug mode on, print every wakelock requested
@@ -626,16 +626,46 @@ static bool check_for_block(struct wakeup_source *ws)
 	// only if ws structure is valid
 	if (ws)
 	{
-		// wake lock names handled have maximum length=50 and minimum=1
+		// wake lock names handled have maximum length=128 and minimum=1
 		length = strlen(ws->name);
-		if ((length > 50) || (length < 1))
+		if ((length > 128) || (length < 1))
 			return false;
 
-		// check if wakelock is in wake lock list to be blocked
+		// check if wakelock is in wake lock list to be blocked (exact match)
 		sprintf(wakelock_name, ";%s;", ws->name);
 
-		if(strstr(list_wl_search, wakelock_name) == NULL)
-			return false;
+		if (strstr(list_wl_search, wakelock_name) == NULL) {
+			/* Also check substring match (e.g. "NETLINK" matches "epoll_hvdcp_opti_file:NETLINK") */
+			char match_key[64];
+			char *p = list_wl_search;
+			bool found = false;
+
+			while (*p) {
+				char *sep;
+				size_t klen;
+
+				while (*p == ';')
+					p++;
+				if (!*p)
+					break;
+				sep = strchr(p, ';');
+				klen = sep ? (size_t)(sep - p) : strlen(p);
+				if (klen > 0 && klen < sizeof(match_key)) {
+					memcpy(match_key, p, klen);
+					match_key[klen] = '\0';
+					if (strstr(ws->name, match_key) != NULL) {
+						found = true;
+						break;
+					}
+				}
+				if (!sep)
+					break;
+				p = sep + 1;
+			}
+
+			if (!found)
+				return false;
+		}
 
 		// wake lock is in list, print it if debug mode on
 		if (wl_blocker_debug)

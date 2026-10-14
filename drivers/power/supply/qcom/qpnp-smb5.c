@@ -4263,6 +4263,7 @@ static int smb5_suspend(struct device *device)
 	struct smb_charger *chg = &chip->chg;
 
 	chg->suspended = true;
+	cancel_delayed_work(&chg->mmi.heartbeat_work);
 
 	return 0;
 }
