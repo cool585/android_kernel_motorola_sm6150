@@ -9684,13 +9684,9 @@ static void mmi_heartbeat_work(struct work_struct *work)
 	if (!atomic_read(&chip->mmi.hb_ready))
 		return;
 
-	/* Have not been resumed so wait another 100 ms */
-	if (chip->suspended) {
-		smblib_err(chip, "SMB HB running before Resume\n");
-		schedule_delayed_work(&mmi->heartbeat_work,
-				      msecs_to_jiffies(300));
+	/* Have not been resumed so do not run during suspend; smb5_resume will re-arm */
+	if (chip->suspended)
 		return;
-	}
 
 	vote(chip->awake_votable, HEARTBEAT_VOTER, true, true);
 
