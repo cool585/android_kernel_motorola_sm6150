@@ -3947,6 +3947,7 @@ static void tcp_parse_fastopen_option(int len, const unsigned char *cookie,
 	foc->exp = exp_opt;
 }
 
+
 /* Try to parse the MSS option from the TCP header. Return 0 on failure, clamped
  * value on success.
  */
@@ -4007,7 +4008,6 @@ static bool smc_parse_options(const struct tcphdr *th,
 #endif
 	return false;
 }
-
 /* Look for tcp options. Normally only called on SYN and SYNACK packets.
  * But, this can also be called on packets in the established flow when
  * the fast version below fails.

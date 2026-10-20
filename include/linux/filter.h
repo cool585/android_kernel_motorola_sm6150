@@ -550,6 +550,9 @@ struct sock_fprog_kern {
 #define BPF_IMAGE_ALIGNMENT 8
 
 struct bpf_binary_header {
+#ifdef CONFIG_CFI_CLANG
+	u32 magic;
+#endif
 	u32 pages;
 	u8 image[] __aligned(BPF_IMAGE_ALIGNMENT);
 };
@@ -632,6 +635,7 @@ static inline u32 bpf_prog_run_pin_on_cpu(const struct bpf_prog *prog,
 	migrate_enable();
 	return ret;
 }
+
 
 #define BPF_SKB_CB_LEN QDISC_CB_PRIV_LEN
 

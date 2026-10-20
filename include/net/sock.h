@@ -272,6 +272,7 @@ struct bpf_local_storage;
   *	@sk_route_nocaps: forbidden route capabilities (e.g NETIF_F_GSO_MASK)
   *	@sk_gso_type: GSO type (e.g. %SKB_GSO_TCPV4)
   *	@sk_gso_max_size: Maximum GSO segment size to build
+  *	@sk_gso_max_segs: Maximum number of GSO segments
   *	@sk_pacing_shift: scaling factor for TCP Small Queues
   *	@sk_lingertime: %SO_LINGER l_linger setting
   *	@sk_backlog: always used with the per-socket spinlock held
@@ -2650,4 +2651,5 @@ int sockev_unregister_notify(struct notifier_block *nb);
 
 int sock_bindtoindex(struct sock *sk, int ifindex, bool lock_sk);
 
+void sock_def_readable(struct sock *sk);
 #endif	/* _SOCK_H */
