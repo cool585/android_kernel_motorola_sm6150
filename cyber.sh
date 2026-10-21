@@ -150,7 +150,7 @@ export SUBARCH=arm64
 
 echo -e "${CYAN}${BOLD}"
 echo "=================================================="
-echo "          Cybertron Kernel Builder (v18)          "
+echo "          Cybertron Kernel Builder (v19)          "
 echo "=================================================="
 echo -e "${NC}"
 echo -e " Target Device : ${GREEN}${BOLD}${DEVICE_NAME}${NC}"
@@ -317,7 +317,7 @@ fi
 
 # Step 5: Packaging with AnyKernel3
 TIMESTAMP=$(date +"%Y%m%d-%H%M")
-ZIP_NAME="Cybertron-v18-${DEVICE}-${TIMESTAMP}.zip"
+ZIP_NAME="Cybertron-v19-${DEVICE}-${TIMESTAMP}.zip"
 
 # Auto-clone AnyKernel3 if missing
 if [ ! -d "${ZIP_DIR}" ]; then
@@ -370,8 +370,8 @@ if [ -d "${ZIP_DIR}" ]; then
 
     # Update version banner if version file exists
     if [ -f "version" ]; then
-        sed -i "s/Cybertron-V[0-9]\+.*\"/Cybertron-v18\"/g" version 2>/dev/null || true
-        sed -i "s/Cybertron-v[0-9]\+.*\"/Cybertron-v18\"/g" version 2>/dev/null || true
+        sed -i "s/Cybertron-V[0-9]\+.*\"/Cybertron-v19\"/g" version 2>/dev/null || true
+        sed -i "s/Cybertron-v[0-9]\+.*\"/Cybertron-v19\"/g" version 2>/dev/null || true
     fi
 
     # Configure anykernel.sh device name dynamically
