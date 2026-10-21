@@ -232,6 +232,7 @@ static struct attribute *attributes[] = {
 	&dev_attr_hw_reset.attr,
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	&dev_attr_vendor.attr,
+	&dev_attr_modalias.attr,
 #endif
 	NULL
 };
@@ -241,22 +242,8 @@ static const struct attribute_group attribute_group = {
 };
 
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
-static struct attribute *class_attributes[] = {
-	&dev_attr_dev_enable.attr,
-	&dev_attr_irq.attr,
-	&dev_attr_irq_cnt.attr,
-	&dev_attr_hw_reset.attr,
-	&dev_attr_vendor.attr,
-	&dev_attr_modalias.attr,
-	NULL
-};
-
-static const struct attribute_group class_attribute_group = {
-	.attrs = class_attributes,
-};
-
-static const struct attribute_group *class_attribute_groups[] = {
-	&class_attribute_group,
+static const struct attribute_group *attribute_groups[] = {
+	&attribute_group,
 	NULL
 };
 #endif
@@ -324,7 +311,7 @@ static int fpc1020_create_sysfs(struct fpc1020_data *fpc1020, bool create) {
 			}
 		}
 		fpc1020->class_dev = device_create_with_groups(fingerprint_class, NULL,
-				MAJOR(dev_no), fpc1020, class_attribute_groups, "fpc1020");
+				MAJOR(dev_no), fpc1020, attribute_groups, "fpc1020");
 		if (IS_ERR(fpc1020->class_dev)) {
 			dev_err(dev, "%s create fingerprint class device failed.\n", __func__);
 			rc = PTR_ERR(fpc1020->class_dev);
