@@ -57,7 +57,7 @@ extern bool wl_blocker_debug;
 static void build_search_string(char *list1, char *list2)
 {
 	// store wakelock list and search string (with semicolons added at start and end)
-	sprintf(list_wl_search, ";%s;%s;", list1, list2);
+	snprintf(list_wl_search, LENGTH_LIST_WL_SEARCH, ";%s;%s;", list1, list2);
 
 	// set flag if wakelock blocker should be active (for performance reasons)
 	if (strlen(list_wl_search) > 5)
@@ -87,11 +87,12 @@ static ssize_t wakelock_blocker_store(struct device * dev, struct device_attribu
 	int len = n;
 
 	// check if string is too long to be stored
-	if (len > LENGTH_LIST_WL)
+	if (len >= LENGTH_LIST_WL)
 		return -EINVAL;
 
 	// store user configured wakelock list and rebuild search string
-	sscanf(buf, "%s", list_wl);
+	if (sscanf(buf, "%2047s", list_wl) <= 0)
+		list_wl[0] = '\0';
 	build_search_string(list_wl_default, list_wl);
 
 	return n;
@@ -114,11 +115,12 @@ static ssize_t wakelock_blocker_default_store(struct device * dev, struct device
 	int len = n;
 
 	// check if string is too long to be stored
-	if (len > LENGTH_LIST_WL_DEFAULT)
+	if (len >= LENGTH_LIST_WL_DEFAULT)
 		return -EINVAL;
 
 	// store default, predefined wakelock list and rebuild search string
-	sscanf(buf, "%s", list_wl_default);
+	if (sscanf(buf, "%2047s", list_wl_default) <= 0)
+		list_wl_default[0] = '\0';
 	build_search_string(list_wl_default, list_wl);
 
 	return n;
@@ -210,7 +212,7 @@ static int boeffla_wl_blocker_init(void)
 	}
 
 	// initialize default list
-	sprintf(list_wl_default, "%s", LIST_WL_DEFAULT);
+	snprintf(list_wl_default, sizeof(list_wl_default), "%s", LIST_WL_DEFAULT);
 	build_search_string(list_wl_default, list_wl);
 
 	// Print debug info

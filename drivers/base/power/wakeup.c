@@ -615,6 +615,9 @@ static bool check_for_block(struct wakeup_source *ws)
 	char wakelock_name[132] = {0};
 	int length;
 
+	if (!ws || !ws->name)
+		return false;
+
 	// if debug mode on, print every wakelock requested
 	if (wl_blocker_debug)
 		printk("Boeffla WL blocker: %s requested\n", ws->name);
@@ -623,69 +626,62 @@ static bool check_for_block(struct wakeup_source *ws)
 	if (!wl_blocker_active)
 		return false;
 
-	// only if ws structure is valid
-	if (ws)
-	{
-		// wake lock names handled have maximum length=128 and minimum=1
-		length = strlen(ws->name);
-		if ((length > 128) || (length < 1))
-			return false;
+	// wake lock names handled have maximum length=128 and minimum=1
+	length = strlen(ws->name);
+	if ((length > 128) || (length < 1))
+		return false;
 
-		// check if wakelock is in wake lock list to be blocked (exact match)
-		sprintf(wakelock_name, ";%s;", ws->name);
+	// check if wakelock is in wake lock list to be blocked (exact match)
+	snprintf(wakelock_name, sizeof(wakelock_name), ";%s;", ws->name);
 
-		if (strstr(list_wl_search, wakelock_name) == NULL) {
-			/* Also check substring match (e.g. "NETLINK" matches "epoll_hvdcp_opti_file:NETLINK") */
-			char match_key[64];
-			char *p = list_wl_search;
-			bool found = false;
+	if (strstr(list_wl_search, wakelock_name) == NULL) {
+		/* Also check substring match (e.g. "NETLINK" matches "epoll_hvdcp_opti_file:NETLINK") */
+		char match_key[64];
+		char *p = list_wl_search;
+		bool found = false;
 
-			while (*p) {
-				char *sep;
-				size_t klen;
+		while (*p) {
+			char *sep;
+			size_t klen;
 
-				while (*p == ';')
-					p++;
-				if (!*p)
+			while (*p == ';')
+				p++;
+			if (!*p)
+				break;
+			sep = strchr(p, ';');
+			klen = sep ? (size_t)(sep - p) : strlen(p);
+			if (klen > 0 && klen < sizeof(match_key)) {
+				memcpy(match_key, p, klen);
+				match_key[klen] = '\0';
+				if (strstr(ws->name, match_key) != NULL) {
+					found = true;
 					break;
-				sep = strchr(p, ';');
-				klen = sep ? (size_t)(sep - p) : strlen(p);
-				if (klen > 0 && klen < sizeof(match_key)) {
-					memcpy(match_key, p, klen);
-					match_key[klen] = '\0';
-					if (strstr(ws->name, match_key) != NULL) {
-						found = true;
-						break;
-					}
 				}
-				if (!sep)
-					break;
-				p = sep + 1;
 			}
-
-			if (!found)
-				return false;
+			if (!sep)
+				break;
+			p = sep + 1;
 		}
 
-		// wake lock is in list, print it if debug mode on
-		if (wl_blocker_debug)
-			printk("Boeffla WL blocker: %s blocked\n", ws->name);
-
-		// if it is currently active, deactivate it immediately + log in debug mode
-		if (ws->active)
-		{
-			wakeup_source_deactivate(ws);
-
-			if (wl_blocker_debug)
-				printk("Boeffla WL blocker: %s killed\n", ws->name);
-		}
-
-		// finally block it
-		return true;
+		if (!found)
+			return false;
 	}
 
-	// there was no valid ws structure, do not block by default
-	return false;
+	// wake lock is in list, print it if debug mode on
+	if (wl_blocker_debug)
+		printk("Boeffla WL blocker: %s blocked\n", ws->name);
+
+	// if it is currently active, deactivate it immediately + log in debug mode
+	if (ws->active)
+	{
+		wakeup_source_deactivate(ws);
+
+		if (wl_blocker_debug)
+			printk("Boeffla WL blocker: %s killed\n", ws->name);
+	}
+
+	// finally block it
+	return true;
 }
 #endif
 
@@ -697,9 +693,10 @@ static bool check_for_block(struct wakeup_source *ws)
 static void wakeup_source_report_event(struct wakeup_source *ws, bool hard)
 {
 #ifdef CONFIG_BOEFFLA_WL_BLOCKER
-	if (!check_for_block(ws))	// AP: check if wakelock is on wakelock blocker list
-	{
+	if (check_for_block(ws))
+		return;
 #endif
+
 	ws->event_count++;
 	/* This is racy, but the counter is approximate anyway. */
 	if (events_check_enabled)
@@ -707,10 +704,6 @@ static void wakeup_source_report_event(struct wakeup_source *ws, bool hard)
 
 	if (!ws->active)
 		wakeup_source_activate(ws);
-
-#ifdef CONFIG_BOEFFLA_WL_BLOCKER
-	}
-#endif
 
 	if (hard)
 		pm_system_wakeup();
@@ -730,6 +723,15 @@ void __pm_stay_awake(struct wakeup_source *ws)
 		return;
 
 	spin_lock_irqsave(&ws->lock, flags);
+
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	if (check_for_block(ws)) {
+		del_timer(&ws->timer);
+		ws->timer_expires = 0;
+		spin_unlock_irqrestore(&ws->lock, flags);
+		return;
+	}
+#endif
 
 	wakeup_source_report_event(ws, false);
 	del_timer(&ws->timer);
@@ -919,6 +921,11 @@ void pm_wakeup_ws_event(struct wakeup_source *ws, unsigned int msec, bool hard)
 		return;
 
 	spin_lock_irqsave(&ws->lock, flags);
+
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	if (check_for_block(ws))
+		goto unlock;
+#endif
 
 	wakeup_source_report_event(ws, hard);
 
