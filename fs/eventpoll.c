@@ -44,6 +44,7 @@
 #include <linux/compat.h>
 #include <linux/rculist.h>
 #include <net/busy_poll.h>
+#include <linux/timerfd.h>
 
 /*
  * LOCKING:
@@ -1394,6 +1395,14 @@ static int ep_create_wakeup_source(struct epitem *epi)
 	struct wakeup_source *ws;
 	char task_comm_buf[TASK_COMM_LEN];
 	char buf[64];
+
+	/*
+	 * Do not create an epoll wakeup source for timerfds that are not
+	 * alarm timers (e.g. CLOCK_REALTIME, CLOCK_BOOTTIME). These are
+	 * non-wakeup timers and should not hold or create a wake lock.
+	 */
+	if (is_file_timerfd(epi->ffd.file) && !timerfd_is_alarm(epi->ffd.file))
+		return 0;
 
 	get_task_comm(task_comm_buf, current);
 

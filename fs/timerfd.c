@@ -373,6 +373,24 @@ static const struct file_operations timerfd_fops = {
 	.unlocked_ioctl	= timerfd_ioctl,
 };
 
+bool is_file_timerfd(struct file *file)
+{
+	return file && file->f_op == &timerfd_fops;
+}
+EXPORT_SYMBOL_GPL(is_file_timerfd);
+
+bool timerfd_is_alarm(struct file *file)
+{
+	struct timerfd_ctx *ctx;
+
+	if (!file || file->f_op != &timerfd_fops)
+		return false;
+
+	ctx = file->private_data;
+	return ctx ? isalarm(ctx) : false;
+}
+EXPORT_SYMBOL_GPL(timerfd_is_alarm);
+
 static int timerfd_fget(int fd, struct fd *p)
 {
 	struct fd f = fdget(fd);

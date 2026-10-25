@@ -17,4 +17,9 @@
 /* Flags for timerfd_settime.  */
 #define TFD_SETTIME_FLAGS (TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET)
 
+struct file;
+
+bool is_file_timerfd(struct file *file);
+bool timerfd_is_alarm(struct file *file);
+
 #endif /* _LINUX_TIMERFD_H */
