@@ -48,6 +48,7 @@
 	#include <linux/earlysuspend.h>
 #define FTS_SUSPEND_LEVEL 1     /* Early-suspend level */
 #endif
+#include <linux/panel_notifier.h>
 #include "focaltech_core.h"
 
 /*****************************************************************************
@@ -611,18 +612,18 @@ static int fts_read_touchdata(struct fts_ts_data *data)
     }
 
     if ((ret < 0) || ((buf[1] & 0xF0) != 0x90)) {
+#if FTS_GESTURE_EN
+        if (data->suspended && data->should_enable_gesture) {
+            ret = fts_gesture_readdata(data, NULL);
+            if (0 == ret) {
+                pr_info("[FTS_TS] success to get gesture data in irq handler\n");
+                return 1;
+            }
+        }
+#endif
         FTS_ERROR("touch data(%x) abnormal,ret:%d", buf[1], ret);
         return -EIO;
     }
-
-#if FTS_GESTURE_EN
-    ret = fts_gesture_readdata(data, buf + FTS_TOUCH_DATA_LEN);
-    if (0 == ret) {
-        FTS_INFO("succuss to get gesture data in irq handler");
-        return 1;
-    }
-#endif
-
 
     if (data->log_level >= 3) {
         fts_show_touch_buffer(buf, data->pnt_buf_size);
@@ -753,6 +754,11 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
     }
 
     if (data->touch_point == 0) {
+#if FTS_GESTURE_EN
+        if (data->suspended && data->should_enable_gesture) {
+            detect_doubletap2wake(0, 0, FTS_TOUCH_UP);
+        }
+#endif
         FTS_INFO("no touch point information");
         return -EIO;
     }
@@ -830,14 +836,28 @@ static void fts_irq_read_report(void)
     pm_qos_update_request(&ts_data->pm_spi_req, 100);
 
     ret = fts_read_parse_touchdata(ts_data);
-    if ((ret == 0) && !ts_data->suspended) {
-        mutex_lock(&ts_data->report_mutex);
+    if (ret == 0) {
+        if (!ts_data->suspended) {
+            mutex_lock(&ts_data->report_mutex);
 #if FTS_MT_PROTOCOL_B_EN
-        fts_input_report_b(ts_data);
+            fts_input_report_b(ts_data);
 #else
-        fts_input_report_a(ts_data);
+            fts_input_report_a(ts_data);
 #endif
-        mutex_unlock(&ts_data->report_mutex);
+            mutex_unlock(&ts_data->report_mutex);
+#if FTS_GESTURE_EN
+        } else if (ts_data->should_enable_gesture) {
+            if (ts_data->touch_point == 1 && ts_data->point_num <= 1) {
+                if (detect_doubletap2wake(ts_data->events[0].x, ts_data->events[0].y, ts_data->events[0].flag)) {
+                    pr_info("[FTS_TS] Software DT2W triggered at (%d, %d), reporting KEY_WAKEUP\n",
+                            ts_data->events[0].x, ts_data->events[0].y);
+                    fts_gesture_report(ts_data->input_dev, GESTURE_DOUBLECLICK);
+                }
+            } else if (ts_data->touch_point > 1 || ts_data->point_num > 1) {
+                doubletap2wake_reset();
+            }
+#endif
+        }
     }
 
     pm_qos_update_request(&ts_data->pm_touch_req, PM_QOS_DEFAULT_VALUE);
@@ -1608,6 +1628,7 @@ int drm_notifier_callback(struct notifier_block *self,
         if (MSM_DRM_EARLY_EVENT_BLANK == event) {
             FTS_INFO("resume: event = %lu, not care\n", event);
         } else if (MSM_DRM_EVENT_BLANK == event) {
+            touch_set_state(0, TOUCH_PANEL_IDX_PRIMARY);
             queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
         }
         break;
@@ -1618,13 +1639,18 @@ int drm_notifier_callback(struct notifier_block *self,
 #ifdef FOCALTECH_PALM_SENSOR_EN
             if (ts_data->palm_detection_enabled) {
                 FTS_INFO("palm detection is enabled");
+                touch_set_state(FTS_PALM_SENSOR, TOUCH_PANEL_IDX_PRIMARY);
                 return FTS_PALM_SENSOR;
             }
 #endif
 #ifdef FOCALTECH_SENSOR_EN
             if (fts_data->should_enable_gesture) {
                 pr_info("[FTS_TS] double tap gesture suspend\n");
+                touch_set_state(FTS_PALM_SENSOR, TOUCH_PANEL_IDX_PRIMARY);
                 return FTS_PALM_SENSOR;
+            } else {
+                touch_set_state(0, TOUCH_PANEL_IDX_PRIMARY);
+                return 0;
             }
 #endif
         } else if (MSM_DRM_EVENT_BLANK == event) {

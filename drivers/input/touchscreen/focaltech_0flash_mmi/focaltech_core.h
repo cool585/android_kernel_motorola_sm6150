@@ -286,12 +286,21 @@ int fts_bus_exit(struct fts_ts_data *ts_data);
 
 /* Gesture functions */
 #if FTS_GESTURE_EN
+#ifndef FTS_PALM_SENSOR
+#define FTS_PALM_SENSOR 2
+#endif
+#ifndef GESTURE_DOUBLECLICK
+#define GESTURE_DOUBLECLICK 0x24
+#endif
 int fts_gesture_init(struct fts_ts_data *ts_data);
 int fts_gesture_exit(struct fts_ts_data *ts_data);
 void fts_gesture_recovery(struct fts_ts_data *ts_data);
 int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data);
 int fts_gesture_suspend(struct fts_ts_data *ts_data);
 int fts_gesture_resume(struct fts_ts_data *ts_data);
+void fts_gesture_report(struct input_dev *input_dev, int gesture_id);
+bool detect_doubletap2wake(int x, int y, int flag);
+void doubletap2wake_reset(void);
 #endif
 
 /* Apk and functions */

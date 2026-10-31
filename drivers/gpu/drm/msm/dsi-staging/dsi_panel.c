@@ -488,8 +488,7 @@ static bool panel_power_is_alway_on(struct dsi_panel *panel)
 
 	if( check_touch_state(&touch_state, TOUCH_PANEL_IDX_PRIMARY) == 0)
 	{
-		if (touch_state)
-			panel->lcd_not_sleep = touch_state;
+		panel->lcd_not_sleep = touch_state;
 		rc = touch_state ? 1: 0;
 	}
 
@@ -5255,7 +5254,8 @@ int dsi_panel_disable(struct dsi_panel *panel)
 		       panel->power_mode == SDE_MODE_DPMS_LP2))
 			dsi_pwr_panel_regulator_mode_set(&panel->power_info,
 				"ibb", REGULATOR_MODE_STANDBY);
-		if(panel->tp_state_check && panel->lcd_not_sleep && panel->lcd_not_sleep == panel->panel_off_nosleep_state){
+		panel_power_is_alway_on(panel);
+		if(panel->tp_state_check && panel->lcd_not_sleep){
 			pr_info("(%s), tp gesture enable, just turn off panel display, not sleep.\n", panel->name);
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISPLAY_OFF);
 		} else {

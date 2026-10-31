@@ -624,7 +624,7 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 			break;
 		}
 	}
-	return NOTIFY_OK;
+	return NOTIFY_DONE;
 }
 
 static struct notifier_block goodix_noti_block = {

@@ -22,6 +22,7 @@
 #include "dsi_drm.h"
 #include "sde_trace.h"
 #include "sde_encoder.h"
+#include <linux/panel_notifier.h>
 
 #define to_dsi_bridge(x)     container_of((x), struct dsi_bridge, base)
 #define to_dsi_state(x)      container_of((x), struct dsi_connector_state, base)
@@ -342,12 +343,21 @@ static void dsi_bridge_tp_state_set(struct drm_bridge *bridge,
 				u32 lcd_not_sleep)
 {
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
+	u32 touch_state = 0;
 
 	if (!bridge) {
 		pr_debug_once("Invalid params\n");
 		return;
 	}
-       c_bridge->display->panel->lcd_not_sleep= lcd_not_sleep;
+
+	if (check_touch_state(&touch_state, TOUCH_PANEL_IDX_PRIMARY) == 0) {
+		if (touch_state != 0)
+			lcd_not_sleep = touch_state;
+		else if (lcd_not_sleep == 1)
+			lcd_not_sleep = 0;
+	}
+
+	c_bridge->display->panel->lcd_not_sleep = lcd_not_sleep;
 
 	printk("c_bridge->display->lcd_not_sleep: %d\n", c_bridge->display->panel->lcd_not_sleep);
 }

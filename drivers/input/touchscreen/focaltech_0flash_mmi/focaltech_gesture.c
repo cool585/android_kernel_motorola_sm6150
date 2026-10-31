@@ -33,6 +33,7 @@
 * 1.Included header files
 *****************************************************************************/
 #include "focaltech_core.h"
+#include <linux/panel_notifier.h>
 #if FTS_GESTURE_EN
 /******************************************************************************
 * Private constant and macro definitions using #define
@@ -72,10 +73,24 @@
 #endif
 
 /* Double tap detection resources */
-#define DT2W_FEATHER        150
-#define DT2W_TIME         500
-static unsigned long long tap_time_pre = 0;
-static int touch_nr = 0, x_pre = 0, y_pre = 0;
+#define DT2W_FEATHER          200   /* max pixel movement between taps or during tap */
+#define DT2W_TAP_MAX_DURATION 300   /* max duration of a single tap down in ms */
+#define DT2W_GAP_MIN          40    /* min gap between tap1 UP and tap2 DOWN in ms (debounce) */
+#define DT2W_GAP_MAX          450   /* max gap between tap1 UP and tap2 DOWN in ms */
+#define DT2W_TOTAL_MAX_TIME   650   /* max total time from tap1 DOWN to tap2 DOWN in ms */
+
+enum dt2w_state {
+    DT2W_STATE_IDLE = 0,
+    DT2W_STATE_TAP1_DOWN,
+    DT2W_STATE_TAP1_UP,
+    DT2W_STATE_REJECT,
+};
+
+static enum dt2w_state dt_state = DT2W_STATE_IDLE;
+static unsigned long long tap1_down_time = 0;
+static unsigned long long tap1_up_time = 0;
+static int tap1_x = 0;
+static int tap1_y = 0;
 
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
@@ -244,7 +259,7 @@ int fts_create_gesture_sysfs(struct device *dev)
     return 0;
 }
 
-static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
+void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 {
     int gesture;
 #ifdef FOCALTECH_SENSOR_EN
@@ -341,12 +356,15 @@ static int fts_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 {
     FTS_INFO("Gesture set enable %d!", enable);
     mutex_lock(&fts_data->state_mutex);
-    if (enable == 1)
+    if (enable == 1) {
         fts_data->should_enable_gesture = true;
-    else if (enable == 0)
+        touch_set_state(FTS_PALM_SENSOR, TOUCH_PANEL_IDX_PRIMARY);
+    } else if (enable == 0) {
         fts_data->should_enable_gesture = false;
-    else
+        touch_set_state(0, TOUCH_PANEL_IDX_PRIMARY);
+    } else {
         FTS_INFO("unknown enable symbol\n");
+    }
 
     mutex_unlock(&fts_data->state_mutex);
     return 0;
@@ -429,50 +447,105 @@ int fts_sensor_remove(struct fts_ts_data *data)
 #endif
 
 /* Doubletap2wake */
-static void doubletap2wake_reset(void) {
-	touch_nr = 0;
-	tap_time_pre = 0;
-	x_pre = 0;
-	y_pre = 0;
-}
-
-static unsigned int calc_feather(int coord, int prev_coord) {
-	int calc_coord = 0;
-	calc_coord = coord-prev_coord;
-	if (calc_coord < 0)
-		calc_coord = calc_coord * (-1);
-	return calc_coord;
-}
-
-static void new_touch(int x, int y) {
-	tap_time_pre = ktime_to_ms(ktime_get());
-	x_pre = x;
-	y_pre = y;
-	touch_nr++;
-}
-
-static bool detect_doubletap2wake(int x, int y)
+void doubletap2wake_reset(void)
 {
-	if (touch_nr == 0) {
-		new_touch(x, y);
-	} else if (touch_nr == 1) {
-		if ((calc_feather(x, x_pre) < DT2W_FEATHER) &&
-			(calc_feather(y, y_pre) < DT2W_FEATHER) &&
-			((ktime_to_ms(ktime_get())-tap_time_pre) < DT2W_TIME))
-			touch_nr++;
-		else {
-			doubletap2wake_reset();
-			new_touch(x, y);
-		}
-	} else {
-		doubletap2wake_reset();
-		new_touch(x, y);
-	}
-	if ((touch_nr > 1)) {
-		doubletap2wake_reset();
-		return true;
-	}
-	return false;
+    dt_state = DT2W_STATE_IDLE;
+    tap1_down_time = 0;
+    tap1_up_time = 0;
+    tap1_x = 0;
+    tap1_y = 0;
+}
+
+static unsigned int calc_feather(int coord, int prev_coord)
+{
+    int calc_coord = coord - prev_coord;
+    return (calc_coord < 0) ? -calc_coord : calc_coord;
+}
+
+bool detect_doubletap2wake(int x, int y, int flag)
+{
+    unsigned long long now = ktime_to_ms(ktime_get());
+
+    /* Check for timeout when waiting for tap 2 */
+    if (dt_state == DT2W_STATE_TAP1_UP) {
+        if ((now - tap1_down_time > DT2W_TOTAL_MAX_TIME) ||
+            (now - tap1_up_time > DT2W_GAP_MAX)) {
+            doubletap2wake_reset();
+        }
+    }
+
+    if (EVENT_DOWN(flag)) {
+        if (dt_state == DT2W_STATE_IDLE) {
+            /* First tap down */
+            tap1_down_time = now;
+            tap1_x = x;
+            tap1_y = y;
+            dt_state = DT2W_STATE_TAP1_DOWN;
+            return false;
+        } else if (dt_state == DT2W_STATE_TAP1_DOWN) {
+            /* Finger is still down during first tap */
+            if (calc_feather(x, tap1_x) > DT2W_FEATHER ||
+                calc_feather(y, tap1_y) > DT2W_FEATHER) {
+                /* Movement exceeded threshold: swipe or drag, reject */
+                dt_state = DT2W_STATE_REJECT;
+                return false;
+            }
+            if ((now - tap1_down_time) > DT2W_TAP_MAX_DURATION) {
+                /* Held too long: long press or hold, reject */
+                dt_state = DT2W_STATE_REJECT;
+                return false;
+            }
+            /* Still in valid first tap contact */
+            return false;
+        } else if (dt_state == DT2W_STATE_TAP1_UP) {
+            /* Second tap down! */
+            unsigned long long gap = now - tap1_up_time;
+            unsigned long long total = now - tap1_down_time;
+
+            if (gap < DT2W_GAP_MIN) {
+                /* Bounce / contact chatter, ignore */
+                return false;
+            }
+
+            if (gap <= DT2W_GAP_MAX && total <= DT2W_TOTAL_MAX_TIME &&
+                calc_feather(x, tap1_x) <= DT2W_FEATHER &&
+                calc_feather(y, tap1_y) <= DT2W_FEATHER) {
+                pr_info("[FTS_TS] DT2W recognized! tap1_dur=%llums, gap=%llums, total=%llums, dist=(%d,%d)\n",
+                        tap1_up_time - tap1_down_time, gap, total,
+                        calc_feather(x, tap1_x), calc_feather(y, tap1_y));
+                doubletap2wake_reset();
+                return true;
+            }
+
+            /* Outside window or distance; start over with this as new tap 1 */
+            tap1_down_time = now;
+            tap1_x = x;
+            tap1_y = y;
+            dt_state = DT2W_STATE_TAP1_DOWN;
+            return false;
+        } else if (dt_state == DT2W_STATE_REJECT) {
+            /* Still in rejected touch; ignore until finger lifts */
+            return false;
+        }
+    } else if (EVENT_UP(flag)) {
+        if (dt_state == DT2W_STATE_TAP1_DOWN) {
+            unsigned long long duration = now - tap1_down_time;
+            if (duration <= DT2W_TAP_MAX_DURATION) {
+                /* Valid first tap completed! */
+                tap1_up_time = now;
+                dt_state = DT2W_STATE_TAP1_UP;
+            } else {
+                doubletap2wake_reset();
+            }
+            return false;
+        } else if (dt_state == DT2W_STATE_REJECT) {
+            /* Finger lifted after rejected touch; reset to IDLE */
+            doubletap2wake_reset();
+            return false;
+        }
+    }
+
+    return false;
 }
 
 /*****************************************************************************
@@ -495,6 +568,7 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
     int i = 0;
     int index = 0;
     u8 buf[FTS_GESTURE_DATA_LEN] = { 0 };
+    u8 gesture_en = 0;
     struct input_dev *input_dev = ts_data->input_dev;
     struct fts_gesture_st *gesture = &fts_gesture_data;
 
@@ -502,28 +576,26 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
         return 1;
     }
 
-    if (!data) {
-        FTS_ERROR("gesture data buffer is null");
-        ret = -EINVAL;
-        return ret;
-    }
-
-    memcpy(buf, data, FTS_GESTURE_DATA_LEN);
-    if (buf[0] != ENABLE) {
-        FTS_DEBUG("gesture not enable in fw, don't process gesture");
+    ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
+    if ((ret < 0) || (gesture_en != ENABLE)) {
         return 1;
     }
 
+    buf[2] = FTS_REG_GESTURE_OUTPUT_ADDRESS;
+    ret = fts_read(&buf[2], 1, &buf[2], FTS_GESTURE_DATA_LEN - 2);
+    if (ret < 0) {
+        FTS_ERROR("read gesture header data fail: %d\n", ret);
+        return ret;
+    }
 
-    /* init variable before read gesture point */
-    memset(gesture->coordinate_x, 0, FTS_GESTURE_POINTS_MAX * sizeof(u16));
-    memset(gesture->coordinate_y, 0, FTS_GESTURE_POINTS_MAX * sizeof(u16));
     gesture->gesture_id = buf[2];
     gesture->point_num = buf[3];
-    FTS_DEBUG("gesture_id=%d, point_num=%d",
-              gesture->gesture_id, gesture->point_num);
+    if (gesture->gesture_id != 0) {
+        pr_info("[FTS_TS] gesture reg read: gesture_id=0x%02x, point_num=%d\n",
+                gesture->gesture_id, gesture->point_num);
+    }
 
-    /* save point data,max:6 */
+    /* save point data, max: 6 */
     for (i = 0; i < FTS_GESTURE_POINTS_MAX; i++) {
         index = 4 * i + 4;
         gesture->coordinate_x[i] = (u16)(((buf[0 + index] & 0x0F) << 8)
@@ -533,11 +605,13 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
     }
 
     /* report gesture to OS */
-	if (gesture->gesture_id == GESTURE_DOUBLECLICK ||
-	    detect_doubletap2wake(gesture->coordinate_x[0], gesture->coordinate_y[0]))
-		fts_gesture_report(input_dev, GESTURE_DOUBLECLICK);
+    if (gesture->gesture_id == GESTURE_DOUBLECLICK) {
+        pr_info("[FTS_TS] Hardware gesture GESTURE_DOUBLECLICK recognized!\n");
+        fts_gesture_report(input_dev, GESTURE_DOUBLECLICK);
+        return 0;
+    }
 
-	return 0;
+    return 1;
 }
 
 void fts_gesture_recovery(struct fts_ts_data *ts_data)
@@ -560,6 +634,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
     int i = 0;
     u8 state = 0xFF;
 
+    doubletap2wake_reset();
     FTS_INFO("gesture suspend...");
     /* gesture not enable, return immediately */
     if (fts_gesture_data.mode == DISABLE) {
@@ -603,6 +678,7 @@ int fts_gesture_resume(struct fts_ts_data *ts_data)
     int i = 0;
     u8 state = 0xFF;
 
+    doubletap2wake_reset();
     FTS_INFO("gesture resume...");
     /* gesture not enable, return immediately */
     if (fts_gesture_data.mode == DISABLE) {
