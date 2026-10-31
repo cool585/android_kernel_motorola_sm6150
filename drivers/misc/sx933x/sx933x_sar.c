@@ -197,7 +197,7 @@ static int sx933x_Hardware_Check(psx93XX_t this)
 		this->failStatusCode = SX933x_I2C_ERROR;
 	}
 
-	if(idCode!= SX933X_WHOAMI_VALUE_1 && idCode!= SX933X_WHOAMI_VALUE_2)
+	if(idCode!= SX933X_WHOAMI_VALUE_1 && idCode!= SX933X_WHOAMI_VALUE_2 && idCode!= SX933X_WHOAMI_VALUE_3)
 	{
 		this->failStatusCode = SX933x_ID_ERROR;
 	}
