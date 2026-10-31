@@ -488,7 +488,8 @@ static bool panel_power_is_alway_on(struct dsi_panel *panel)
 
 	if( check_touch_state(&touch_state, TOUCH_PANEL_IDX_PRIMARY) == 0)
 	{
-		panel->lcd_not_sleep = touch_state;
+		if (touch_state)
+			panel->lcd_not_sleep = touch_state;
 		rc = touch_state ? 1: 0;
 	}
 

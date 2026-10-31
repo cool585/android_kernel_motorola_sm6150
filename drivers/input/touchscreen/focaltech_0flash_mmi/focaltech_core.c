@@ -1623,8 +1623,8 @@ int drm_notifier_callback(struct notifier_block *self,
 #endif
 #ifdef FOCALTECH_SENSOR_EN
             if (fts_data->should_enable_gesture) {
-                FTS_INFO("double tap gesture suspend\n");
-                return 1;
+                pr_info("[FTS_TS] double tap gesture suspend\n");
+                return FTS_PALM_SENSOR;
             }
 #endif
         } else if (MSM_DRM_EVENT_BLANK == event) {
@@ -2139,7 +2139,7 @@ static int _fts_ts_suspend(struct device *dev)
             ts_data->screen_state = SCREEN_OFF;
             ts_data->wakeable = true;
             mutex_unlock(&ts_data->state_mutex);
-            FTS_INFO("Enter gesture suspend mode.");
+            pr_info("[FTS_TS] Enter gesture suspend mode.\n");
 #endif
             return 0;
         }

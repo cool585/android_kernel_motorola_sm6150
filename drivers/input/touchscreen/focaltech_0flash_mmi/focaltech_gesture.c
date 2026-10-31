@@ -308,6 +308,7 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
             return;
         }
         if (fts_data->pdata->report_gesture_key) {
+            pr_info("[FTS_TS] Gesture detected, reporting KEY_WAKEUP\n");
             input_report_key(fts_data->sensor_pdata->input_sensor_dev, KEY_WAKEUP, 1);
             input_sync(fts_data->sensor_pdata->input_sensor_dev);
             input_report_key(fts_data->sensor_pdata->input_sensor_dev, KEY_WAKEUP, 0);
@@ -532,8 +533,9 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
     }
 
     /* report gesture to OS */
-	if (detect_doubletap2wake(gesture->coordinate_x[0], gesture->coordinate_y[0]))
-		fts_gesture_report(input_dev, gesture->gesture_id);
+	if (gesture->gesture_id == GESTURE_DOUBLECLICK ||
+	    detect_doubletap2wake(gesture->coordinate_x[0], gesture->coordinate_y[0]))
+		fts_gesture_report(input_dev, GESTURE_DOUBLECLICK);
 
 	return 0;
 }
@@ -591,7 +593,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
     }
 
     fts_gesture_data.active = ENABLE;
-    FTS_INFO("Enter into gesture(suspend) successfully!");
+    pr_info("[FTS_TS] Enter into gesture(suspend) successfully!\n");
     return 0;
 }
 
