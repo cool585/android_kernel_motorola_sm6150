@@ -706,7 +706,8 @@ static u32 psi_group_change(struct psi_group *group, int cpu,
 					clear, set);
 			psi_bug = 1;
 		}
-		groupc->tasks[t]--;
+		if (groupc->tasks[t] > 0)
+			groupc->tasks[t]--;
 	}
 
 	for (t = 0; set; set &= ~(1 << t), t++)
@@ -767,6 +768,12 @@ void psi_task_change(struct task_struct *task, int clear, int set)
 				task->psi_flags, clear, set);
 		psi_bug = 1;
 	}
+
+	clear &= task->psi_flags;
+	set &= ~task->psi_flags;
+
+	if (!clear && !set)
+		return;
 
 	task->psi_flags &= ~clear;
 	task->psi_flags |= set;
