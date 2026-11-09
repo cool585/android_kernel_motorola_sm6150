@@ -1697,20 +1697,18 @@ QDF_STATUS csr_get_phy_mode_from_bss(struct mac_context *mac,
 							pIes);
 
 	if (pIes) {
-		if (pIes->HTCaps.present) {
+		if (pIes->HTCaps.present)
 			phyMode = eCSR_DOT11_MODE_11n;
-			if (IS_BSS_VHT_CAPABLE(pIes->VHTCaps) ||
-				IS_BSS_VHT_CAPABLE(pIes->vendor_vht_ie.VHTCaps))
-				phyMode = eCSR_DOT11_MODE_11ac;
-			if (pIes->he_cap.present)
-				phyMode = eCSR_DOT11_MODE_11ax;
-		} else if (WLAN_REG_IS_6GHZ_CHAN_FREQ(
-					pBSSDescription->chan_freq)) {
-			if (pIes->he_cap.present)
-				phyMode = eCSR_DOT11_MODE_11ax;
-			else
-				sme_debug("Warning - 6Ghz AP no he cap");
-		}
+
+		if (IS_BSS_VHT_CAPABLE(pIes->VHTCaps) ||
+		    IS_BSS_VHT_CAPABLE(pIes->vendor_vht_ie.VHTCaps))
+			phyMode = eCSR_DOT11_MODE_11ac;
+
+		if (pIes->he_cap.present)
+			phyMode = eCSR_DOT11_MODE_11ax;
+		else if (WLAN_REG_IS_6GHZ_CHAN_FREQ(
+					pBSSDescription->chan_freq))
+			sme_debug("Warning - 6Ghz AP no he cap");
 
 		*pPhyMode = phyMode;
 	}

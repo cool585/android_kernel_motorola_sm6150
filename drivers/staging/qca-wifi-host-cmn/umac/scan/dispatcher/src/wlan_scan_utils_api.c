@@ -1758,9 +1758,12 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	tmp_old = util_scan_find_ie(WLAN_ELEMID_SSID, ie, ielen);
 	tmp_old = (tmp_old) ? tmp_old + tmp_old[1] + 2 : ie;
 
-	while (tmp_old + tmp_old[1] + 2 - ie <= ielen) {
+	while ((tmp_old + 2 <= ie + ielen) &&
+	       (tmp_old + tmp_old[1] + 2 - ie <= ielen)) {
 		if (tmp_old[0] == 0) {
-			tmp_old++;
+			if (tmp_old + tmp_old[1] + 2 - ie == ielen)
+				break;
+			tmp_old += tmp_old[1] + 2;
 			continue;
 		}
 
@@ -1825,7 +1828,8 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	 * copied to new ie, skip ssid, capability, bssid-index ie
 	 */
 	tmp_new = sub_copy;
-	while (tmp_new + tmp_new[1] + 2 - sub_copy <= subie_len) {
+	while ((tmp_new + 2 <= sub_copy + subie_len) &&
+	       (tmp_new + tmp_new[1] + 2 - sub_copy <= subie_len)) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
 		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
