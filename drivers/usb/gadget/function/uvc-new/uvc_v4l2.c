@@ -285,8 +285,8 @@ uvc_v4l2_set_format(struct file *file, void *fh, struct v4l2_format *fmt)
 		return ret;
 
 	video->fcc = fmt->fmt.pix.pixelformat;
-	video->bpp = fmt->fmt.pix.bytesperline * 8 / video->width;
 	video->width = fmt->fmt.pix.width;
+	video->bpp = video->width ? fmt->fmt.pix.bytesperline * 8 / video->width : 0;
 	video->height = fmt->fmt.pix.height;
 	video->imagesize = fmt->fmt.pix.sizeimage;
 
