@@ -16,7 +16,7 @@
 #include <linux/string.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
-#include <linux/usb/g_uvc-new.h>
+#include <linux/usb/g_uvc.h>
 #include <linux/usb/video.h>
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
@@ -1005,6 +1005,7 @@ static struct usb_function *uvc_alloc(struct usb_function_instance *fi)
 
 	uvc->header = to_uvcg_streaming_header(h);
 	if (!uvc->header->linked) {
+		config_item_put(h);
 		mutex_unlock(&opts->lock);
 		kfree(uvc);
 		return ERR_PTR(-EBUSY);

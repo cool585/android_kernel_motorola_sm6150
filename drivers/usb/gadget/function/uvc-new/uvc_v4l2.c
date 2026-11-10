@@ -10,7 +10,7 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
-#include <linux/usb/g_uvc-new.h>
+#include <linux/usb/g_uvc.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
@@ -381,7 +381,6 @@ uvc_v4l2_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 	f->pixelformat = fmtdesc->fcc;
 
 	strscpy(f->description, fmtdesc->name, sizeof(f->description));
-	f->description[strlen(fmtdesc->name) - 1] = 0;
 
 	return 0;
 }

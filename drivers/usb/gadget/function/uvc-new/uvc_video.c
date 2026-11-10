@@ -505,9 +505,9 @@ uvc_video_alloc_requests(struct uvc_video *video)
 
 	BUG_ON(video->req_size);
 
-	req_size = video->ep->maxpacket
+	req_size = max_t(unsigned int, video->ep->maxpacket, 1)
 		 * max_t(unsigned int, video->ep->maxburst, 1)
-		 * (video->ep->mult);
+		 * max_t(unsigned int, video->ep->mult, 1);
 
 	for (i = 0; i < video->uvc_num_requests; i++) {
 		ureq = kzalloc(sizeof(struct uvc_request), GFP_KERNEL);
