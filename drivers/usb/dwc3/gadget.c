@@ -879,8 +879,27 @@ static void dwc3_remove_requests(struct dwc3 *dwc, struct dwc3_ep *dep)
 
 	dbg_log_string("START for %s(%d)", dep->name, dep->number);
 	ret = dwc3_stop_active_transfer(dwc, dep->number, true);
-	if (ret)
-		return;
+	if (ret) {
+		/*
+		 * ENDTRANSFER timed out, which is what happens when the host
+		 * resets the bus while an isochronous endpoint (e.g. UVC) is
+		 * still active. Bailing out here leaves the requests queued
+		 * forever: the gadget's ->unbind() then waits for completions
+		 * that never come ("no clean disconnect, wait for release")
+		 * and the controller stays wedged.
+		 *
+		 * Mark the controller as errored and request a session restart
+		 * so the msm wrapper resets it, but still give the requests
+		 * back below so upper layers are not deadlocked.
+		 */
+		dev_warn(dwc->dev,
+			 "%s: ENDTRANSFER timeout (%d), forcing request cleanup\n",
+			 dep->name, ret);
+		dep->flags &= ~DWC3_EP_TRANSFER_STARTED;
+		dep->resource_index = 0;
+		dwc->err_evt_seen = true;
+		dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0);
+	}
 
 	if (dep->number == 1 && dwc->ep0state != EP0_SETUP_PHASE) {
 		unsigned int dir;
@@ -1690,12 +1709,8 @@ static int dwc3_gadget_ep_dequeue(struct usb_ep *ep,
 	struct dwc3			*dwc = dep->dwc;
 
 	unsigned long			flags;
+	bool				in_lpm = !!atomic_read(&dwc->in_lpm);
 	int				ret = 0;
-
-	if (atomic_read(&dwc->in_lpm)) {
-		dev_err(dwc->dev, "Unable to dequeue while in LPM\n");
-		return -EAGAIN;
-	}
 
 	trace_dwc3_ep_dequeue(req);
 
@@ -1712,6 +1727,20 @@ static int dwc3_gadget_ep_dequeue(struct usb_ep *ep,
 				break;
 		}
 		if (r == req) {
+			/*
+			 * ENDTRANSFER cannot complete while the controller is
+			 * in low power mode, so ask the caller to retry. Only
+			 * started requests need it; requests that are still on
+			 * pending_list can always be dequeued safely.
+			 */
+			if (in_lpm) {
+				dev_err(dwc->dev,
+					"%s: cannot dequeue started request while in LPM\n",
+					dep->name);
+				ret = -EAGAIN;
+				goto out0;
+			}
+
 			/* wait until it is processed */
 			dwc3_stop_active_transfer(dwc, dep->number, true);
 

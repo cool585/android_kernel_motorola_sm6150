@@ -9,12 +9,14 @@
 #ifndef _UVC_GADGET_H_
 #define _UVC_GADGET_H_
 
+#include <linux/atomic.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
 #include <linux/usb/composite.h>
 #include <linux/videodev2.h>
 #include <linux/wait.h>
+#include <linux/workqueue.h>
 
 #include <media/v4l2-device.h>
 #include <media/v4l2-dev.h>
@@ -68,6 +70,14 @@ extern unsigned int uvc_gadget_trace_param;
 
 #define UVC_MAX_REQUEST_SIZE			64
 #define UVC_MAX_EVENTS				4
+
+/*
+ * How long we wait for userspace to answer a control request forwarded as a
+ * UVC_EVENT_SETUP before stalling ep0. Without this an unanswered request
+ * (e.g. Windows probing the camera while switching to photo mode) leaves the
+ * control pipe busy forever and the host application hangs.
+ */
+#define UVC_SETUP_TIMEOUT_MS			1000
 
 #define UVCG_REQUEST_HEADER_LEN			12
 
@@ -168,6 +178,10 @@ struct uvc_device {
 	/* Events */
 	unsigned int event_length;
 	unsigned int event_setup_out : 1;
+
+	/* Guard against userspace never answering a forwarded control request */
+	struct delayed_work setup_timeout;
+	atomic_t setup_pending;
 };
 
 static inline struct uvc_device *to_uvc(struct usb_function *f)
@@ -189,6 +203,7 @@ struct uvc_file_handle {
  */
 
 extern void uvc_function_setup_continue(struct uvc_device *uvc, int disable_ep);
+extern void uvc_function_setup_done(struct uvc_device *uvc);
 extern void uvc_function_connect(struct uvc_device *uvc);
 extern void uvc_function_disconnect(struct uvc_device *uvc);
 

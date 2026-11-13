@@ -184,6 +184,9 @@ uvc_send_response(struct uvc_device *uvc, struct uvc_request_data *data)
 	struct usb_composite_dev *cdev = uvc->func.config->cdev;
 	struct usb_request *req = uvc->control_req;
 
+	/* userspace answered; disarm the ep0 stall deadline */
+	uvc_function_setup_done(uvc);
+
 	if (data->length < 0)
 		return usb_ep_set_halt(cdev->gadget->ep0);
 

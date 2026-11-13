@@ -220,6 +220,32 @@ uvc_function_ep0_complete(struct usb_ep *ep, struct usb_request *req)
 	}
 }
 
+static void
+uvc_function_setup_timeout(struct work_struct *work)
+{
+	struct uvc_device *uvc = container_of(to_delayed_work(work),
+					      struct uvc_device, setup_timeout);
+	struct usb_composite_dev *cdev = uvc->func.config ?
+					 uvc->func.config->cdev : NULL;
+
+	if (!atomic_xchg(&uvc->setup_pending, 0))
+		return;
+
+	if (!cdev || !cdev->gadget) {
+		uvcg_dbg(&uvc->func, "setup timeout after unbind\n");
+		return;
+	}
+
+	/*
+	 * Userspace never sent UVCIOC_SEND_RESPONSE. Stall ep0 so the host
+	 * gets a definitive answer instead of a control transfer that never
+	 * completes (Windows' usbvideo.sys then hangs the camera app).
+	 */
+	uvcg_warn(&uvc->func,
+		  "no userspace response to control request, stalling ep0\n");
+	usb_ep_set_halt(cdev->gadget->ep0);
+}
+
 static int
 uvc_function_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 {
@@ -260,7 +286,18 @@ uvc_function_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 
 	v4l2_event_queue(&uvc->vdev, &v4l2_event);
 
+	/* Arm the deadline for userspace to send UVCIOC_SEND_RESPONSE. */
+	atomic_set(&uvc->setup_pending, 1);
+	schedule_delayed_work(&uvc->setup_timeout,
+			      msecs_to_jiffies(UVC_SETUP_TIMEOUT_MS));
+
 	return 0;
+}
+
+void uvc_function_setup_done(struct uvc_device *uvc)
+{
+	if (atomic_xchg(&uvc->setup_pending, 0))
+		cancel_delayed_work(&uvc->setup_timeout);
 }
 
 void uvc_function_setup_continue(struct uvc_device *uvc, int disable_ep)
@@ -920,6 +957,8 @@ static void uvc_free(struct usb_function *f)
 	struct uvc_device *uvc = to_uvc(f);
 	struct f_uvc_opts *opts = container_of(f->fi, struct f_uvc_opts,
 					       func_inst);
+	atomic_set(&uvc->setup_pending, 0);
+	cancel_delayed_work_sync(&uvc->setup_timeout);
 	config_item_put(&uvc->header->item);
 	--opts->refcnt;
 	kfree(uvc);
@@ -936,6 +975,8 @@ static void uvc_function_unbind(struct usb_configuration *c,
 	bool connected;
 
 	uvcg_info(f, "%s()\n", __func__);
+	atomic_set(&uvc->setup_pending, 0);
+	cancel_delayed_work_sync(&uvc->setup_timeout);
 	mutex_lock(&uvc->lock);
 	uvc->func_unbound = true;
 	uvc->vdev_release_done = &vdev_release_done;
@@ -1003,6 +1044,8 @@ static struct usb_function *uvc_alloc(struct usb_function_instance *fi)
 
 	mutex_init(&uvc->video.mutex);
 	mutex_init(&uvc->lock);
+	INIT_DELAYED_WORK(&uvc->setup_timeout, uvc_function_setup_timeout);
+	atomic_set(&uvc->setup_pending, 0);
 	uvc->func_unbound = true;
 	uvc->state = UVC_STATE_DISCONNECTED;
 	init_waitqueue_head(&uvc->func_connected_queue);
