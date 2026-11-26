@@ -540,7 +540,14 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 		goto error_disable_vregs;
 	}
 
-	if (!dsi_panel_lcd_keep_power(panel)) {
+	/*
+	 * Only skip hardware reset for PANEL_NOSLEEP panels (state 2, e.g. liber
+	 * FocalTech). Panels with PANEL_SLEEP (state 1, e.g. hanoip ILI7807S TDDI)
+	 * or PANEL_POWEROFF (0, e.g. odessa) still require a hardware reset on wake.
+	 */
+	if (!(panel->tp_state_check &&
+	      panel->panel_off_nosleep_state == PANEL_NOSLEEP &&
+	      panel->lcd_not_sleep == PANEL_NOSLEEP)) {
 		rc = dsi_panel_reset(panel);
 		if (rc) {
 			pr_debug_once("[%s] failed to reset panel, rc=%d\n", panel->name, rc);
