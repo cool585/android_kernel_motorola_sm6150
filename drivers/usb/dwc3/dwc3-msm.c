@@ -4118,6 +4118,7 @@ static int dwc3_msm_extcon_register(struct dwc3_msm *mdwc)
 	if (!mdwc->extcon)
 		return -ENOMEM;
 
+	/* Resolve all extcon phandles first to avoid leaking notifiers on -EPROBE_DEFER */
 	for (idx = 0; idx < extcon_cnt; idx++) {
 		edev = extcon_get_edev_by_phandle(mdwc->dev, idx);
 		if (IS_ERR(edev) && PTR_ERR(edev) != -ENODEV)
@@ -4126,11 +4127,23 @@ static int dwc3_msm_extcon_register(struct dwc3_msm *mdwc)
 		if (IS_ERR_OR_NULL(edev))
 			continue;
 
-		check_vbus_state = check_id_state = true;
 		phandle_found = true;
+		mdwc->extcon[idx].edev = edev;
+	}
+
+	if (!phandle_found) {
+		dev_err(mdwc->dev, "no extcon device found\n");
+		return -ENODEV;
+	}
+
+	for (idx = 0; idx < extcon_cnt; idx++) {
+		edev = mdwc->extcon[idx].edev;
+		if (!edev)
+			continue;
+
+		check_vbus_state = check_id_state = true;
 
 		mdwc->extcon[idx].mdwc = mdwc;
-		mdwc->extcon[idx].edev = edev;
 		mdwc->extcon[idx].idx = idx;
 
 		mdwc->extcon[idx].vbus_nb.notifier_call =
@@ -4167,11 +4180,6 @@ static int dwc3_msm_extcon_register(struct dwc3_msm *mdwc)
 				extcon_get_state(edev, EXTCON_USB_HOST))
 			dwc3_msm_id_notifier(&mdwc->extcon[idx].id_nb,
 						true, edev);
-	}
-
-	if (!phandle_found) {
-		dev_err(mdwc->dev, "no extcon device found\n");
-		return -ENODEV;
 	}
 
 	return 0;
