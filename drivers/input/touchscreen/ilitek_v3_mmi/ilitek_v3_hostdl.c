@@ -373,13 +373,67 @@ static int ilitek_tddi_fw_iram_upgrade(u8 *pfw, bool mcu)
 	/* Program data to iram acorrding to each block */
 	for (i = 0; i < FW_BLOCK_INFO_NUM; i++) {
 		if (fbi[i].mode == mode && fbi[i].len != 0) {
+			/* Patch IRAM AP block: restore Touch AFE in LPWG boot & convert 0x0102E Single-Tap -> Double-Tap */
+			if (mode == AP && fbi[i].len == 0x14000) {
+				u8 *ap_buf = fw_ptr + fbi[i].start;
+
+				if (ap_buf[0x0F6B0] == 0x49 && ap_buf[0x0F6B1] == 0xFF &&
+				    ap_buf[0x0F6B2] == 0xC0 && ap_buf[0x0F6B3] == 0xEB) {
+					static const u8 afe_trampoline[40] = {
+						0xfc, 0x00, 0x49, 0xff, 0xb9, 0xa2, 0x2e, 0x07,
+						0xf0, 0x44, 0x96, 0x06, 0xc0, 0x0d, 0x84, 0x00,
+						0x49, 0xff, 0xd6, 0x19, 0x44, 0x04, 0x70, 0x04,
+						0x84, 0x20, 0xb6, 0x20, 0x49, 0xff, 0xc8, 0x86,
+						0x84, 0x01, 0x49, 0xff, 0xc0, 0x57, 0xfc, 0x80
+					};
+					static const u8 hook_jal[4] = { 0x49, 0x00, 0x07, 0x48 };
+					static const u8 dt_helper[88] = {
+						0x80, 0xc0, 0x84, 0x03, 0x84, 0x20, 0x49, 0xff,
+						0xf2, 0x2d, 0xce, 0x24, 0x3c, 0x07, 0xf6, 0x9e,
+						0x40, 0x00, 0x28, 0x01, 0x44, 0x2f, 0xfb, 0x50,
+						0xe0, 0x02, 0xe9, 0x1c, 0x44, 0x20, 0x04, 0xb0,
+						0xe0, 0x40, 0xe9, 0x18, 0x3c, 0x07, 0xf6, 0x9d,
+						0x40, 0x00, 0x1c, 0x01, 0x44, 0x2f, 0xfb, 0x50,
+						0xe0, 0x02, 0xe9, 0x10, 0x44, 0x20, 0x04, 0xb0,
+						0xe0, 0x40, 0xe9, 0x0c, 0x3c, 0x07, 0xf6, 0x9e,
+						0x3c, 0x17, 0xf6, 0x9d, 0x49, 0xff, 0x85, 0x10,
+						0x5a, 0x00, 0x01, 0x05, 0x84, 0xc1, 0x48, 0xff,
+						0x85, 0xb6, 0x84, 0xc0, 0x48, 0xff, 0x85, 0xb3
+					};
+					static const u8 dt_hook_j[4] = { 0x48, 0x00, 0x7a, 0x51 };
+					static const u8 dt_timeout[4] = { 0x44, 0x10, 0x01, 0xc2 };
+					static const u8 dt_disable_st[2] = { 0x84, 0xc0 };
+					u32 patched_crc;
+
+					memcpy(ap_buf + 0x0F6B0, hook_jal, sizeof(hook_jal));
+					memcpy(ap_buf + 0x10540, afe_trampoline, sizeof(afe_trampoline));
+					if (ap_buf[0x010CE] == 0x80 && ap_buf[0x010CF] == 0xC0 &&
+					    ap_buf[0x010F4] == 0x44 && ap_buf[0x01128] == 0x80) {
+						memcpy(ap_buf + 0x010CE, dt_hook_j, sizeof(dt_hook_j));
+						memcpy(ap_buf + 0x010F4, dt_timeout, sizeof(dt_timeout));
+						memcpy(ap_buf + 0x01128, dt_disable_st, sizeof(dt_disable_st));
+						memcpy(ap_buf + 0x10570, dt_helper, sizeof(dt_helper));
+					}
+					patched_crc = (u32)CalculateCRC32(fbi[i].start, fbi[i].len - crc_len, fw_ptr);
+					ap_buf[0x13FFC] = (patched_crc >> 24) & 0xFF;
+					ap_buf[0x13FFD] = (patched_crc >> 16) & 0xFF;
+					ap_buf[0x13FFE] = (patched_crc >> 8) & 0xFF;
+					ap_buf[0x13FFF] = patched_crc & 0xFF;
+					ILI_INFO("Patched LPWG AFE + Double-Tap, CRC=0x%08x\n", patched_crc);
+				}
+			}
 			ILI_DBG("Download %s code from hex 0x%x to IRAM 0x%x, len = 0x%x\n",
 					fbi[i].name, fbi[i].start, fbi[i].mem_start, fbi[i].len);
 
 			if (ilitek_tddi_fw_iram_program(fbi[i].mem_start, (fw_ptr + fbi[i].start), fbi[i].len, SPI_UPGRADE_LEN) < 0)
 				ILI_ERR("IRAM program failed\n");
 
-			crc = CalculateCRC32(fbi[i].start, fbi[i].len - crc_len, fw_ptr);
+			if (mode == AP && fbi[i].len == 0x14000) {
+				u8 *ap_tail = fw_ptr + fbi[i].start + fbi[i].len - crc_len;
+				crc = (ap_tail[0] << 24) | (ap_tail[1] << 16) | (ap_tail[2] << 8) | ap_tail[3];
+			} else {
+				crc = CalculateCRC32(fbi[i].start, fbi[i].len - crc_len, fw_ptr);
+			}
 			dma = calc_hw_dma_crc(fbi[i].mem_start, fbi[i].len - crc_len);
 
 			if (mode != GESTURE) {
@@ -414,8 +468,8 @@ static int ilitek_tddi_fw_iram_upgrade(u8 *pfw, bool mcu)
 	}
 
 	/* Waiting for fw ready sending first cmd */
-	//if (!ilits->info_from_hex || (ilits->chip->core_ver < CORE_VER_1410))
-		mdelay(20);
+	if (!ilits->gesture_boot)
+		usleep_range(10000, 12000);
 
 	return ret;
 }
@@ -793,6 +847,10 @@ int ili_fw_upgrade(int op)
 	}
 
 out:
+	if (ilits->gesture_boot) {
+		ILI_INFO("Skip AP func_ctrl_reset during gesture boot\n");
+		return ret;
+	}
 	ili_ic_get_core_ver();
 	ili_ic_get_protocl_ver();
 	ili_ic_get_fw_ver();

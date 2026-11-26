@@ -438,11 +438,13 @@ void ili_set_gesture_symbol(void)
 		return;
 
 	}
+	usleep_range(1500, 2000);
 
 	if (ilits->wrapper(&cmd[1], (sizeof(cmd) - 1), NULL, 0, ON, OFF)) {
 		ILI_ERR("Write gesture symbol fail\n");
 		return;
 	}
+	usleep_range(1500, 2000);
 
 	ILI_DBG(" double_tap = %d\n", ilits->ges_sym.double_tap);
 	ILI_DBG(" alphabet_line_2_top = %d\n", ilits->ges_sym.alphabet_line_2_top);
@@ -479,6 +481,12 @@ int ili_move_gesture_code_iram(int mode)
 	ILI_INFO("Gesture code loaded by %s\n", ilits->gesture_load_code ? "driver" : "firmware" );
 
 	if (!ilits->gesture_load_code) {
+		if (ilits->chip->core_ver >= CORE_VER_1460) {
+			ret = ili_touch_esd_gesture_iram();
+			if (ret < 0)
+				ILI_ERR("Failed to enter gesture mode via Core 1.4.6 handshake\n");
+			goto out;
+		}
 		ret = ili_set_tp_data_len(mode, true, NULL);
 		goto out;
 	}
@@ -686,16 +694,17 @@ int ili_touch_esd_gesture_iram(void)
 
 	/* Host download gives effect to FW receives password successed */
 	ilits->actual_tp_mode = P5_X_FW_AP_MODE;
+	ilits->gesture_boot = true;
 	ret = ili_fw_upgrade_handler(NULL);
+	ilits->gesture_boot = false;
 	if (ret < 0) {
 		ILI_ERR("FW upgrade failed during gesture recovery\n");
 		goto fail;
 	}
 
-	/* Wait for fw running code finished. */
+	/* Wait briefly for MCU boot before polling 0x25FF8 == 0xA67C */
 	if (ilits->info_from_hex || (ilits->chip->core_ver >= CORE_VER_1410))
-		msleep(50);
-
+		usleep_range(3000, 4000);
 
 	ret = ili_ice_mode_ctrl(ENABLE, ON);
 	if (ret < 0) {
@@ -704,18 +713,20 @@ int ili_touch_esd_gesture_iram(void)
 	}
 
 	/* polling another specific register to see if gesutre is enabled properly */
-	do {
+	retry = 150;
+	while (--retry > 0) {
 		ret = ili_ice_mode_read(ges_pwd_addr, &answer, pwd_len);
 		if (ret < 0) {
 			ILI_ERR("Read gesture answer error\n");
 			goto fail;
 		}
 
-		if (answer != ges_run)
-			ILI_INFO("ret = 0x%X, answer = 0x%X\n", answer, ges_run);
+		if (answer == ges_run)
+			break;
 
-		mdelay(2);
-	} while (answer != ges_run && --retry > 0);
+		ILI_INFO("ret = 0x%X, answer = 0x%X\n", answer, ges_run);
+		usleep_range(1000, 1500);
+	}
 
 	if (retry <= 0) {
 		ILI_ERR("Enter gesture failed\n");
@@ -1304,10 +1315,14 @@ void ili_report_gesture_mode(u8 *buf, int len)
 			return;
 		}
 		if (ilits->report_gesture_key) {
-			input_report_key(ilits->sensor_pdata->input_sensor_dev, KEY_F1, 1);
-			input_sync(ilits->sensor_pdata->input_sensor_dev);
-			input_report_key(ilits->sensor_pdata->input_sensor_dev, KEY_F1, 0);
-			input_sync(ilits->sensor_pdata->input_sensor_dev);
+			if (ilits->sensor_pdata && ilits->sensor_pdata->input_sensor_dev) {
+				input_report_key(ilits->sensor_pdata->input_sensor_dev, KEY_WAKEUP, 1);
+				input_report_key(ilits->sensor_pdata->input_sensor_dev, KEY_F1, 1);
+				input_sync(ilits->sensor_pdata->input_sensor_dev);
+				input_report_key(ilits->sensor_pdata->input_sensor_dev, KEY_WAKEUP, 0);
+				input_report_key(ilits->sensor_pdata->input_sensor_dev, KEY_F1, 0);
+				input_sync(ilits->sensor_pdata->input_sensor_dev);
+			}
 			++report_cnt;
 		} else {
 			input_report_abs(ilits->sensor_pdata->input_sensor_dev,

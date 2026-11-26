@@ -85,6 +85,10 @@
 				05 01 00 00 96 00 01 10];
 			qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
 			qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
+			qcom,mdss-dsi-panel-display-off-command = [
+				05 01 00 00 14 00 01 28
+				05 01 00 00 32 00 01 10];
+			qcom,mdss-dsi-panel-display-off-command-state = "dsi_hs_mode";
 
 			qcom,compression-mode = "dsc";
 			qcom,mdss-dsc-slice-height = <10>;

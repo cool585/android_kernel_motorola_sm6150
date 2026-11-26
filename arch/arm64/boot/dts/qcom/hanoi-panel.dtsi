@@ -114,6 +114,7 @@
 	qcom,mdss-dsi-panel-supplier = "tm";
 	//qcom,mdss-dsi-tprst-output-high-resume;
 	qcom,tp_state_check_enable;
+	qcom,mdss-dsi-panel-off-nosleep-state = <1>;
 	qcom,platform-reset-gpio-always-on;
 
 	qcom,mdss-dsi-pan-enable-dynamic-fps;

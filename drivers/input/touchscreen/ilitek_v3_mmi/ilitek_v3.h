@@ -116,7 +116,7 @@
 #define TDDI_INTERFACE			BUS_SPI /* BUS_I2C(0x18) or BUS_SPI(0x1C) */
 #define VDD_VOLTAGE			1800000
 #define VCC_VOLTAGE			1800000
-#define SPI_CLK                         9      /* follow by clk list */
+#define SPI_CLK                         11     /* follow by clk list (12 MHz) */
 #define SPI_RETRY			5
 #define IRQ_GPIO_NUM			66
 #define TR_BUF_SIZE			(2*K) /* Buffer size of touch report */
@@ -478,7 +478,7 @@ struct report_info_block {
 #define FW_VER_ADDR				0xFFE0
 #define FW_BLOCK_INFO_NUM			17
 #if SPI_DMA_TRANSFER_SPLIT
-#define SPI_UPGRADE_LEN				2048
+#define SPI_UPGRADE_LEN				4088
 #else
 #define SPI_UPGRADE_LEN				0
 #endif
@@ -963,6 +963,7 @@ struct ilitek_ts_data {
 	bool info_from_hex;
 	bool prox_near;
 	bool gesture_load_code;
+	bool gesture_boot;
 	bool trans_xy;
 	bool ss_ctrl;
 	bool node_update;

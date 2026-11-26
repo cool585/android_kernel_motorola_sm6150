@@ -483,32 +483,41 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 #if CONFIG_PLAT_SPRD
 		case DRM_MODE_DPMS_OFF:
 #endif /* CONFIG_PLAT_SPRD */
-			if (TP_SUSPEND_PRIO) {
 #ifdef CONFIG_DRM_MSM
-				if (event != MSM_DRM_EARLY_EVENT_BLANK)
+			if (event == MSM_DRM_EARLY_EVENT_BLANK) {
 #else
-				if (event != FB_EARLY_EVENT_BLANK)
+			if (event == FB_EARLY_EVENT_BLANK) {
 #endif
-					return NOTIFY_DONE;
-			} else {
-#ifdef CONFIG_DRM_MSM
-				if (event != MSM_DRM_EVENT_BLANK)
-#else
-				if (event != FB_EVENT_BLANK)
-#endif
-					return NOTIFY_DONE;
-			}
-			if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
-				ILI_ERR("TP suspend failed\n");
 #ifdef ILI_SENSOR_EN
-			if (ilits->should_enable_gesture) {
-				ILI_INFO("double tap gesture suspend\n");
-				touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
-				return 1;
-			} else {
+				if (ilits->should_enable_gesture) {
+					ILI_INFO("double tap early blank: hold panel power\n");
+					touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
+					return 1;
+				}
+				if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+					ILI_ERR("TP suspend failed\n");
 				touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
-			}
+#else
+				if (ilits->gesture || ilits->prox_face_mode == true)
+					return NOTIFY_DONE;
+				if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+					ILI_ERR("TP suspend failed\n");
 #endif
+				return NOTIFY_DONE;
+#ifdef CONFIG_DRM_MSM
+			} else if (event == MSM_DRM_EVENT_BLANK) {
+#else
+			} else if (event == FB_EVENT_BLANK) {
+#endif
+				if (!ilits->tp_suspend) {
+					if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+						ILI_ERR("TP suspend failed\n");
+				}
+#ifdef ILI_SENSOR_EN
+				if (ilits->should_enable_gesture)
+					return 1;
+#endif
+			}
 			break;
 #ifdef CONFIG_DRM_MSM
 		case MSM_DRM_BLANK_UNBLANK:
@@ -561,8 +570,10 @@ static int ili_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 	mutex_lock(&ilits->state_mutex);
 	if (enable == 1) {
 		ilits->should_enable_gesture = true;
+		ilits->gesture = ENABLE;
 	} else if (enable == 0) {
 		ilits->should_enable_gesture = false;
+		ilits->gesture = DISABLE;
 	} else {
 		ILI_INFO("unknown enable symbol\n");
 	}
@@ -594,6 +605,7 @@ static int ili_sensor_init(struct ilitek_ts_data *data)
 	if (data->report_gesture_key) {
 		__set_bit(EV_KEY, sensor_input_dev->evbit);
 		__set_bit(KEY_F1, sensor_input_dev->keybit);
+		__set_bit(KEY_WAKEUP, sensor_input_dev->keybit);
 	} else {
 		__set_bit(EV_ABS, sensor_input_dev->evbit);
 		input_set_abs_params(sensor_input_dev, ABS_DISTANCE,

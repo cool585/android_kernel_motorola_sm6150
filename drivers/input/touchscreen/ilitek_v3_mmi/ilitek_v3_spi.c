@@ -261,6 +261,7 @@ static int ili_spi_pll_clk_wakeup(void)
 		ILI_INFO("spi slave write error\n");
 		return -1;
 	}
+	usleep_range(1500, 2000);
 
 	return 0;
 }
@@ -372,6 +373,14 @@ static int ili_spi_wrapper(u8 *txbuf, u32 wlen, u8 *rxbuf, u32 rlen, bool spi_ir
 		wdata[0] = SPI_READ;
 
 		ret = ilits->spi_write_then_read(ilits->spi, wdata, 1, rxbuf, rlen);
+		if (ret == DO_SPI_RECOVER && !ice && ilits->tp_suspend && ilits->pll_clk_wakeup) {
+			ILI_ERR("SPI_READ returned DO_SPI_RECOVER in suspend, waking SPI PLL and retrying\n");
+			if (ili_spi_pll_clk_wakeup() == 0) {
+				usleep_range(1000, 1500);
+				wdata[0] = SPI_READ;
+				ret = ilits->spi_write_then_read(ilits->spi, wdata, 1, rxbuf, rlen);
+			}
+		}
 		if (ret < 0)
 			ILI_ERR("spi-wrapper read error\n");
 

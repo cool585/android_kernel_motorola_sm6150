@@ -564,7 +564,6 @@ int ili_sleep_handler(int mode)
 		break;
 	case TP_DEEP_SLEEP:
 		ILI_INFO("TP deep suspend start\n");
-		ilits->tp_suspend = true;
 		ilits->power_status = false;
 		if (sense_stop) {
 			if (ili_ic_func_ctrl("sense", DISABLE) < 0)
@@ -577,10 +576,12 @@ int ili_sleep_handler(int mode)
 #ifdef  ILI_SENSOR_EN
 		if (ilits->should_enable_gesture) {
 			ili_switch_tp_mode(P5_X_FW_GESTURE_MODE);
+			ilits->tp_suspend = true;
 			enable_irq_wake(ilits->irq_num);
 			ili_irq_enable();
 			ilits->wakeable = true;
 		} else {
+			ilits->tp_suspend = true;
 			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
 				ILI_ERR("Write deep sleep in cmd failed\n");
 			ilits->wakeable = false;
@@ -588,9 +589,11 @@ int ili_sleep_handler(int mode)
 #else
 		if ((ilits->gesture) || (ilits->prox_face_mode == true)) {
 			ili_switch_tp_mode(P5_X_FW_GESTURE_MODE);
+			ilits->tp_suspend = true;
 			enable_irq_wake(ilits->irq_num);
 			ili_irq_enable();
 		} else {
+			ilits->tp_suspend = true;
 			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
 				ILI_ERR("Write deep sleep in cmd failed\n");
 		}
@@ -601,8 +604,10 @@ int ili_sleep_handler(int mode)
 #if !RESUME_BY_DDI
 		ILI_INFO("TP resume start\n");
 		ilits->tp_suspend = false;
+#ifndef ILI_SENSOR_EN
 		if (ilits->gesture)
 			disable_irq_wake(ilits->irq_num);
+#endif
 
 		/* Set tp as demo mode and reload code if it's iram. */
 		ilits->actual_tp_mode = P5_X_FW_AP_MODE;
